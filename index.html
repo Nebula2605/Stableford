@@ -5,23 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Noosa Hills Par 3 Stableford Score Calculator</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 15px; background: #f4f4f4; }
-  h2, h3 { text-align: center; }
-  table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }
-  th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
-  input[type=number], input[type=text] { width: 70px; font-size: 16px; text-align: center; }
-  .total { font-size: 22px; font-weight: bold; margin-top: 10px; }
-  button { font-size: 16px; padding: 8px; margin: 5px; }
-  #hole-section { margin-top: 20px; text-align: center; }
-  .player-row { display: flex; justify-content: center; flex-wrap: wrap; margin-bottom: 5px; }
-  .player-row input { margin: 2px; }
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 15px; background: #f4f4f4; }
+h2, h3 { text-align: center; }
+table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }
+th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+input[type=number], input[type=text], select { width: 70px; font-size: 16px; text-align: center; margin:2px; }
+button { font-size: 16px; padding: 8px; margin: 5px; }
+.player-row { display: flex; justify-content: center; flex-wrap: wrap; margin-bottom: 5px; }
+#hole-section { margin-top: 20px; text-align: center; }
+#scoreboard { margin-top:20px; text-align:center; }
 </style>
 </head>
 <body>
 
 <h2>Noosa Hills Par 3 Stableford Score Calculator</h2>
 
-<div id="player-select">
+<div id="course-select">
+  <p>Select Round:</p>
+  <select id="round-select">
+    <option value="front9">Front 9 North</option>
+    <option value="back9">Back 9 North</option>
+    <option value="full18">Full 18 North</option>
+  </select>
+  <br><br>
+  <button onclick="showPlayerInputs()">Next</button>
+</div>
+
+<div id="player-select" style="display:none;">
   <div id="players-container">
     <div class="player-row">
       <input type="text" placeholder="Player Name" value="Player 1" class="player-name">
@@ -53,125 +63,166 @@
   <div id="totals"></div>
   <br>
   <button onclick="resetRound()">Reset Round</button>
+
+  <div id="scoreboard">
+    <h3>Live Score Table</h3>
+    <table id="score-table">
+      <thead>
+        <tr>
+          <th>Hole</th>
+          <th>Stroke Index</th>
+          <th>Player</th>
+          <th>Strokes</th>
+          <th>Points</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 </div>
 
 <script>
+// Stroke Index mapping
 const strokeIndex = {
   1: 15, 2: 11, 3: 13, 4: 5, 5: 3, 6: 17,
   7: 1, 8: 7, 9: 9, 10: 2, 11: 8, 12: 18,
   13: 6, 14: 10, 15: 12, 16: 14, 17: 16, 18: 4
 };
-const totalHoles = 18;
 const par = 3;
+let totalHoles = 18;
 
-let currentHole = 1;
+let holeList = []; // holes to play based on course selection
+let currentHoleIndex = 0;
 let players = [];
-let scores = {}; // {hole: {playerName: {strokes, points, handicap}}}
+let scores = {}; // {hole: {playerName:{strokes, points, handicap}}}
 
-// Add / Remove player functions
+// Course selection
+function showPlayerInputs(){
+  const selection = document.getElementById("round-select").value;
+  if(selection==="front9"){ holeList=[1,2,3,4,5,6,7,8,9]; totalHoles=9; }
+  else if(selection==="back9"){ holeList=[10,11,12,13,14,15,16,17,18]; totalHoles=9; }
+  else{ holeList=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]; totalHoles=18; }
+  document.getElementById("course-select").style.display="none";
+  document.getElementById("player-select").style.display="block";
+}
+
+// Player add/remove
 function addPlayer(){
-  const container = document.getElementById("players-container");
-  const div = document.createElement("div");
+  const container=document.getElementById("players-container");
+  const div=document.createElement("div");
   div.classList.add("player-row");
-  div.innerHTML = `
-    <input type="text" placeholder="Player Name" class="player-name">
-    <input type="number" placeholder="Handicap" class="player-handicap">
-    <button type="button" onclick="removePlayer(this)">Remove</button>
-  `;
+  div.innerHTML=`<input type="text" placeholder="Player Name" class="player-name">
+                 <input type="number" placeholder="Handicap" class="player-handicap">
+                 <button type="button" onclick="removePlayer(this)">Remove</button>`;
   container.appendChild(div);
 }
+function removePlayer(btn){btn.parentElement.remove();}
 
-function removePlayer(btn){
-  btn.parentElement.remove();
-}
-
-// Start Round
+// Start round
 function startRound(){
-  const names = Array.from(document.querySelectorAll(".player-name")).map(i=>i.value.trim());
-  const handicaps = Array.from(document.querySelectorAll(".player-handicap")).map(i=>parseInt(i.value)||0);
-  players = names.map((name,i)=>({name, handicap: handicaps[i]})).filter(p=>p.name);
+  const names=Array.from(document.querySelectorAll(".player-name")).map(i=>i.value.trim());
+  const handicaps=Array.from(document.querySelectorAll(".player-handicap")).map(i=>parseInt(i.value)||0);
+  players=names.map((n,i)=>({name:n,handicap:handicaps[i]})).filter(p=>p.name);
   if(players.length===0){alert("Add at least one player"); return;}
-  const storedScores = localStorage.getItem("stablefordScores");
-  if(storedScores) scores = JSON.parse(storedScores);
+  const storedScores=localStorage.getItem("stablefordScores");
+  if(storedScores) scores=JSON.parse(storedScores);
   document.getElementById("player-select").style.display="none";
   document.getElementById("hole-section").style.display="block";
-  showHole(currentHole);
+  currentHoleIndex=0;
+  showHole();
 }
 
 // Show current hole
-function showHole(hole){
-  document.getElementById("current-hole").textContent = hole;
-  document.getElementById("current-si").textContent = strokeIndex[hole];
-  const tbody = document.querySelector("#hole-table tbody");
-  tbody.innerHTML = "";
+function showHole(){
+  const hole=holeList[currentHoleIndex];
+  document.getElementById("current-hole").textContent=hole;
+  document.getElementById("current-si").textContent=strokeIndex[hole];
+  const tbody=document.querySelector("#hole-table tbody");
+  tbody.innerHTML="";
   if(!scores[hole]) scores[hole]={};
   players.forEach(player=>{
-    const strokes = scores[hole][player.name]?.strokes || "";
-    const points = scores[hole][player.name]?.points || 0;
-    tbody.innerHTML += `
-      <tr>
-        <td>${player.name}</td>
-        <td><input type="number" value="${strokes}" onchange="updateScore(${hole}, '${player.name}', this)"></td>
-        <td class="points-cell">${points}</td>
-      </tr>
-    `;
+    const strokes=scores[hole][player.name]?.strokes||"";
+    const points=scores[hole][player.name]?.points||0;
+    tbody.innerHTML+=`<tr>
+      <td>${player.name}</td>
+      <td><input type="number" value="${strokes}" onchange="updateScore(${hole},'${player.name}',this)"></td>
+      <td class="points-cell">${points}</td>
+    </tr>`;
   });
   updateTotals();
+  updateScoreboard();
 }
 
-// Update score for a player
-function updateScore(hole, playerName, inputElement){
-  const strokes = parseInt(inputElement.value)||0;
-  const player = players.find(p=>p.name===playerName);
-  const si = strokeIndex[hole];
-  let shots = 0;
-  if(si <= player.handicap) shots++;
-  if(si <= player.handicap - 18) shots++;
-  const net = strokes - shots;
-  const diff = net - par;
-  let points = 0;
-  if(diff <= -3) points = 5;
-  else if(diff === -2) points = 4;
-  else if(diff === -1) points = 3;
-  else if(diff === 0) points = 2;
-  else if(diff === 1) points = 1;
-  scores[hole][playerName] = {strokes, points, handicap: player.handicap};
-  localStorage.setItem("stablefordScores", JSON.stringify(scores));
-  // Update points cell directly
-  const row = inputElement.parentElement.parentElement;
-  row.querySelector(".points-cell").textContent = points;
+// Update score
+function updateScore(hole, playerName, inputEl){
+  const strokes=parseInt(inputEl.value)||0;
+  const player=players.find(p=>p.name===playerName);
+  const si=strokeIndex[hole];
+  let shots=0;
+  if(si<=player.handicap) shots++;
+  if(si<=player.handicap-18) shots++;
+  const net=strokes-shots;
+  const diff=net-par;
+  let points=0;
+  if(diff<=-3) points=5;
+  else if(diff===-2) points=4;
+  else if(diff===-1) points=3;
+  else if(diff===0) points=2;
+  else if(diff===1) points=1;
+  scores[hole][playerName]={strokes,points,handicap:player.handicap};
+  localStorage.setItem("stablefordScores",JSON.stringify(scores));
+  inputEl.parentElement.parentElement.querySelector(".points-cell").textContent=points;
   updateTotals();
+  updateScoreboard();
 }
 
 // Navigation
 function nextHole(){
-  if(currentHole<totalHoles) currentHole++;
-  showHole(currentHole);
+  if(currentHoleIndex<holeList.length-1) currentHoleIndex++;
+  showHole();
 }
 function prevHole(){
-  if(currentHole>1) currentHole--;
-  showHole(currentHole);
+  if(currentHoleIndex>0) currentHoleIndex--;
+  showHole();
 }
 
 // Totals
 function updateTotals(){
-  const totalsDiv = document.getElementById("totals");
-  totalsDiv.innerHTML = "";
+  const totalsDiv=document.getElementById("totals");
+  totalsDiv.innerHTML="";
   players.forEach(player=>{
-    let total = 0;
-    for(let i=1;i<=totalHoles;i++){
-      total += scores[i]?.[player.name]?.points || 0;
-    }
-    totalsDiv.innerHTML += `<p>${player.name}: ${total} pts</p>`;
+    let total=0;
+    for(const h of holeList) total+=(scores[h]?.[player.name]?.points||0);
+    totalsDiv.innerHTML+=`<p>${player.name}: ${total} pts</p>`;
   });
 }
 
 // Reset round
 function resetRound(){
   if(confirm("Are you sure you want to reset the round? All scores will be lost.")){
-    scores = {};
+    scores={};
     localStorage.removeItem("stablefordScores");
     location.reload();
+  }
+}
+
+// Update live scoreboard
+function updateScoreboard(){
+  const tbody=document.querySelector("#score-table tbody");
+  tbody.innerHTML="";
+  for(const hole of holeList){
+    if(!scores[hole]) continue;
+    for(const player of players){
+      const s=scores[hole][player.name];
+      if(!s) continue;
+      tbody.innerHTML+=`<tr>
+        <td>${hole}</td>
+        <td>${strokeIndex[hole]}</td>
+        <td>${player.name}</td>
+        <td>${s.strokes}</td>
+        <td>${s.points}</td>
+      </tr>`;
+    }
   }
 }
 </script>
