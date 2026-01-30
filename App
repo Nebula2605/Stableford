@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stableford Calculator</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    input { width: 60px; }
+  </style>
+</head>
+<body>
+
+<h2>Stableford Score Calculator</h2>
+
+<label>Player Handicap:
+  <input type="number" id="handicap" value="18">
+</label>
+
+<table>
+  <thead>
+    <tr>
+      <th>Hole</th>
+      <th>Par</th>
+      <th>Stroke Index</th>
+      <th>Strokes</th>
+      <th>Points</th>
+    </tr>
+  </thead>
+  <tbody id="holes"></tbody>
+</table>
+
+<h3>Total Points: <span id="total">0</span></h3>
+
+<script>
+const holesTable = document.getElementById("holes");
+const totalDisplay = document.getElementById("total");
+
+for (let i = 1; i <= 18; i++) {
+  holesTable.innerHTML += `
+    <tr>
+      <td>${i}</td>
+      <td><input type="number" value="4" class="par"></td>
+      <td><input type="number" value="${i}" class="si"></td>
+      <td><input type="number" class="strokes"></td>
+      <td class="points">0</td>
+    </tr>`;
+}
+
+document.addEventListener("input", calculate);
+
+function calculate() {
+  const handicap = parseInt(document.getElementById("handicap").value) || 0;
+  let total = 0;
+
+  document.querySelectorAll("tbody tr").forEach(row => {
+    const par = parseInt(row.querySelector(".par").value);
+    const si = parseInt(row.querySelector(".si").value);
+    const strokes = parseInt(row.querySelector(".strokes").value);
+
+    if (!strokes) return;
+
+    // Handicap strokes for this hole
+    let shots = 0;
+    if (si <= handicap) shots = 1;
+    if (si <= handicap - 18) shots = 2;
+
+    const net = strokes - shots;
+    const diff = net - par;
+
+    let points = 0;
+    if (diff <= -3) points = 5;
+    else if (diff === -2) points = 4;
+    else if (diff === -1) points = 3;
+    else if (diff === 0) points = 2;
+    else if (diff === 1) points = 1;
+
+    row.querySelector(".points").textContent = points;
+    total += points;
+  });
+
+  totalDisplay.textContent = total;
+}
+</script>
+
+</body>
+</html>
