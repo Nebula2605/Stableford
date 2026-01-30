@@ -5,51 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Noosa Hills Par 3 Stableford Score Calculator</title>
 <style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    padding: 15px;
-    background: #f4f4f4;
-  }
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 15px; background: #f4f4f4; }
   h2, h3 { text-align: center; }
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin-top: 10px;
-    font-size: 14px;
-  }
-  th, td {
-    border: 1px solid #ccc;
-    padding: 6px;
-    text-align: center;
-  }
-  input[type=number], input[type=text] {
-    width: 70px;
-    font-size: 16px;
-    text-align: center;
-  }
-  .total {
-    font-size: 22px;
-    font-weight: bold;
-    margin-top: 10px;
-  }
-  button {
-    font-size: 16px;
-    padding: 8px;
-    margin: 5px;
-  }
-  #hole-section {
-    margin-top: 20px;
-    text-align: center;
-  }
-  .player-row {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-bottom: 5px;
-  }
-  .player-row input {
-    margin: 2px;
-  }
+  table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+  input[type=number], input[type=text] { width: 70px; font-size: 16px; text-align: center; }
+  .total { font-size: 22px; font-weight: bold; margin-top: 10px; }
+  button { font-size: 16px; padding: 8px; margin: 5px; }
+  #hole-section { margin-top: 20px; text-align: center; }
+  .player-row { display: flex; justify-content: center; flex-wrap: wrap; margin-bottom: 5px; }
+  .player-row input { margin: 2px; }
 </style>
 </head>
 <body>
@@ -70,7 +35,7 @@
 </div>
 
 <div id="hole-section" style="display:none;">
-  <h3>Hole <span id="current-hole">1</span></h3>
+  <h3>Hole <span id="current-hole">1</span> (SI: <span id="current-si"></span>)</h3>
   <table id="hole-table">
     <thead>
       <tr>
@@ -136,6 +101,7 @@ function startRound(){
 // Show current hole
 function showHole(hole){
   document.getElementById("current-hole").textContent = hole;
+  document.getElementById("current-si").textContent = strokeIndex[hole];
   const tbody = document.querySelector("#hole-table tbody");
   tbody.innerHTML = "";
   if(!scores[hole]) scores[hole]={};
@@ -145,8 +111,8 @@ function showHole(hole){
     tbody.innerHTML += `
       <tr>
         <td>${player.name}</td>
-        <td><input type="number" value="${strokes}" onchange="updateScore(${hole}, '${player.name}')"></td>
-        <td>${points}</td>
+        <td><input type="number" value="${strokes}" onchange="updateScore(${hole}, '${player.name}', this)"></td>
+        <td class="points-cell">${points}</td>
       </tr>
     `;
   });
@@ -154,10 +120,8 @@ function showHole(hole){
 }
 
 // Update score for a player
-function updateScore(hole, playerName){
-  const row = Array.from(document.querySelector("#hole-table tbody tr")).find(r=>r.children[0].textContent===playerName);
-  const strokesInput = row.children[1].querySelector("input");
-  const strokes = parseInt(strokesInput.value)||0;
+function updateScore(hole, playerName, inputElement){
+  const strokes = parseInt(inputElement.value)||0;
   const player = players.find(p=>p.name===playerName);
   const si = strokeIndex[hole];
   let shots = 0;
@@ -173,7 +137,10 @@ function updateScore(hole, playerName){
   else if(diff === 1) points = 1;
   scores[hole][playerName] = {strokes, points, handicap: player.handicap};
   localStorage.setItem("stablefordScores", JSON.stringify(scores));
-  showHole(hole);
+  // Update points cell directly
+  const row = inputElement.parentElement.parentElement;
+  row.querySelector(".points-cell").textContent = points;
+  updateTotals();
 }
 
 // Navigation
