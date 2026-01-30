@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Stableford Calculator</title>
-
 <style>
   body {
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     padding: 15px;
+    background: #f4f4f4;
   }
   h2, h3 { text-align: center; }
   table {
@@ -22,7 +22,7 @@
     padding: 6px;
     text-align: center;
   }
-  input {
+  input[type=number] {
     width: 55px;
     font-size: 16px;
     text-align: center;
@@ -30,90 +30,148 @@
   .total {
     font-size: 22px;
     font-weight: bold;
+    margin-top: 10px;
+  }
+  button {
+    font-size: 18px;
+    padding: 10px;
+    margin: 5px;
+  }
+  #hole-section {
+    margin-top: 20px;
+    text-align: center;
+  }
+  #player-select input {
+    width: 80px;
+    margin: 2px;
+    font-size: 16px;
+    text-align: center;
   }
 </style>
 </head>
-
 <body>
 
 <h2>Stableford Score Calculator</h2>
 
-<p style="text-align:center;">
-  Handicap:
+<div id="player-select">
+  <p>Add Player Names:</p>
+  <input type="text" id="player1" placeholder="Player 1" value="Player 1">
+  <input type="text" id="player2" placeholder="Player 2" value="Player 2">
+  <input type="text" id="player3" placeholder="Player 3" value="">
+  <input type="text" id="player4" placeholder="Player 4" value="">
+  <br>
+  <p>Handicap:</p>
   <input type="number" id="handicap" value="18">
-</p>
+  <br><br>
+  <button onclick="startRound()">Start Round</button>
+</div>
 
-<table>
-  <thead>
-    <tr>
-      <th>Hole</th>
-      <th>Par</th>
-      <th>SI</th>
-      <th>Strokes</th>
-      <th>Pts</th>
-    </tr>
-  </thead>
-  <tbody id="holes"></tbody>
-</table>
-
-<h3 class="total">Total Points: <span id="total">0</span></h3>
+<div id="hole-section" style="display:none;">
+  <h3>Hole <span id="current-hole">1</span></h3>
+  <table id="hole-table">
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>Strokes</th>
+        <th>Points</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <br>
+  <button onclick="prevHole()">Previous Hole</button>
+  <button onclick="nextHole()">Next Hole</button>
+  <h3 class="total">Total Points:</h3>
+  <div id="totals"></div>
+</div>
 
 <script>
-const holesTable = document.getElementById("holes");
-const totalDisplay = document.getElementById("total");
-
 // Stroke Index mapping (hole: SI)
 const strokeIndex = {
   1: 15, 2: 11, 3: 13, 4: 5, 5: 3, 6: 17,
   7: 1, 8: 7, 9: 9, 10: 2, 11: 8, 12: 18,
   13: 6, 14: 10, 15: 12, 16: 14, 17: 16, 18: 4
 };
+const totalHoles = 18;
+const par = 3;
+let currentHole = 1;
+let players = [];
+let scores = {}; // {hole: {playerName: {strokes, points}}}
 
-for (let i = 1; i <= 18; i++) {
-  holesTable.innerHTML += `
-    <tr>
-      <td>${i}</td>
-      <td>3</td>
-      <td>${strokeIndex[i]}</td>
-      <td><input type="number" class="strokes"></td>
-      <td class="points">0</td>
-    </tr>`;
+function startRound() {
+  const h1 = document.getElementById("player1").value.trim();
+  const h2 = document.getElementById("player2").value.trim();
+  const h3 = document.getElementById("player3").value.trim();
+  const h4 = document.getElementById("player4").value.trim();
+  players = [h1,h2,h3,h4].filter(p=>p);
+  if(players.length === 0){alert("Add at least one player"); return;}
+  const storedScores = localStorage.getItem("stablefordScores");
+  if(storedScores) scores = JSON.parse(storedScores);
+  document.getElementById("player-select").style.display="none";
+  document.getElementById("hole-section").style.display="block";
+  showHole(currentHole);
 }
 
-document.addEventListener("input", calculate);
-
-function calculate() {
-  const handicap = parseInt(document.getElementById("handicap").value) || 0;
-  let total = 0;
-
-  document.querySelectorAll("tbody tr").forEach(row => {
-    const par = 3;
-    const si = parseInt(row.children[2].textContent);
-    const strokes = parseInt(row.querySelector(".strokes").value);
-
-    if (!strokes) return;
-
-    let shots = 0;
-    if (si <= handicap) shots++;
-    if (si <= handicap - 18) shots++;
-
-    const net = strokes - shots;
-    const diff = net - par;
-
-    let points = 0;
-    if (diff <= -3) points = 5;
-    else if (diff === -2) points = 4;
-    else if (diff === -1) points = 3;
-    else if (diff === 0) points = 2;
-    else if (diff === 1) points = 1;
-
-    row.querySelector(".points").textContent = points;
-    total += points;
+function showHole(hole) {
+  document.getElementById("current-hole").textContent = hole;
+  const tbody = document.querySelector("#hole-table tbody");
+  tbody.innerHTML = "";
+  if(!scores[hole]) scores[hole]={};
+  players.forEach(player=>{
+    const strokes = scores[hole][player]?.strokes || "";
+    const points = scores[hole][player]?.points || 0;
+    tbody.innerHTML += `
+      <tr>
+        <td>${player}</td>
+        <td><input type="number" value="${strokes}" onchange="updateScore(${hole}, '${player}', this.value)"></td>
+        <td>${points}</td>
+      </tr>
+    `;
   });
+  updateTotals();
+}
 
-  totalDisplay.textContent = total;
+function updateScore(hole, player, strokesInput){
+  const handicap = parseInt(document.getElementById("handicap").value) || 0;
+  const strokes = parseInt(strokesInput) || 0;
+  const si = strokeIndex[hole];
+  let shots = 0;
+  if(si <= handicap) shots++;
+  if(si <= handicap - 18) shots++;
+  const net = strokes - shots;
+  const diff = net - par;
+  let points = 0;
+  if(diff <= -3) points = 5;
+  else if(diff === -2) points = 4;
+  else if(diff === -1) points = 3;
+  else if(diff === 0) points = 2;
+  else if(diff === 1) points = 1;
+  scores[hole][player] = {strokes, points};
+  localStorage.setItem("stablefordScores", JSON.stringify(scores));
+  showHole(hole);
+}
+
+function nextHole(){
+  if(currentHole<totalHoles) currentHole++;
+  showHole(currentHole);
+}
+
+function prevHole(){
+  if(currentHole>1) currentHole--;
+  showHole(currentHole);
+}
+
+function updateTotals(){
+  const totalsDiv = document.getElementById("totals");
+  totalsDiv.innerHTML = "";
+  players.forEach(player=>{
+    let total = 0;
+    for(let i=1;i<=totalHoles;i++){
+      total += scores[i]?.[player]?.points || 0;
+    }
+    totalsDiv.innerHTML += `<p>${player}: ${total} pts</p>`;
+  });
 }
 </script>
-
 </body>
 </html>
